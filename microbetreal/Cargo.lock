@@ -2612,12 +2612,22 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "linera-sdk",
+ "native-fungible-abi",
  "num-bigint",
  "num-traits",
  "rounds",
  "serde",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "native-fungible-abi"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "linera-sdk",
+ "serde",
 ]
 
 [[package]]
@@ -3322,10 +3332,10 @@ dependencies = [
  "async-graphql",
  "bincode",
  "linera-sdk",
+ "native-fungible-abi",
  "num-bigint",
  "num-traits",
  "serde",
- "serde_json",
 ]
 
 [[package]]

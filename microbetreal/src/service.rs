@@ -203,12 +203,4 @@ impl MutationRoot {
         self.runtime.schedule_operation(&ExtendedOperation::SetRoundsAppId { rounds_app_id: rounds_app_id.clone() });
         format!("SetRoundsAppId operation scheduled with ID: {}", rounds_app_id)
     }
-    
-    /// Resolve a round and distribute rewards (calls Rounds app)
-    async fn resolve_round(&self, resolution_price: String) -> String {
-        use linera_sdk::linera_base_types::Amount;
-        let amount = resolution_price.parse::<Amount>().unwrap_or_default();
-        self.runtime.schedule_operation(&ExtendedOperation::ResolveRound { resolution_price: amount });
-        "ResolveRound operation scheduled - will call Rounds app and distribute rewards".to_string()
-    }
 }

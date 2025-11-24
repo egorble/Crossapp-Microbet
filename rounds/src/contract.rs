@@ -6,7 +6,7 @@
 mod state;
 
 use linera_sdk::{
-    linera_base_types::{AccountOwner, Amount, ApplicationId, WithContractAbi},
+    linera_base_types::{Amount, ApplicationId, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
@@ -76,7 +76,7 @@ impl WithContractAbi for RoundsContract {
 impl Contract for RoundsContract {
     type Message = Message;
     type Parameters = (); // No parameters needed
-    type InstantiationArgument = ();
+    type InstantiationArgument = Option<ApplicationId<native_fungible_abi::ExtendedNativeFungibleTokenAbi>>; // NativeFungible app ID
     type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
@@ -86,8 +86,11 @@ impl Contract for RoundsContract {
         RoundsContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, _argument: Self::InstantiationArgument) {
-        // No initialization needed
+    async fn instantiate(&mut self, native_fungible_app_id: Self::InstantiationArgument) {
+        // Store NativeFungible app ID if provided
+        if let Some(app_id) = native_fungible_app_id {
+            self.state.native_fungible_app_id.set(Some(app_id));
+        }
     }
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
@@ -124,19 +127,28 @@ impl Contract for RoundsContract {
                                 // Resolve the round and get winners
                                 match self.state.resolve_round_and_distribute_rewards(round.id, resolution_price, timestamp).await {
                                     Ok(winners) => {
-                                        // Convert winners to RoundWinnerInfo and return via Response
-                                        let winner_info: Vec<_> = winners.into_iter().map(|(owner, bet_amount, winnings, source_chain_id)| {
-                                            rounds::RoundWinnerInfo {
-                                                owner,
-                                                bet_amount,
-                                                winnings,
-                                                source_chain_id,
-                                            }
-                                        }).collect();
+                                        // Get NativeFungible app ID
+                                        let native_fungible_app_id = self.state.native_fungible_app_id.get()
+                                            .expect("NativeFungible app ID not set");
                                         
-                                        RoundsResponse::Winners(winner_info)
+                                        // Call NativeFungible::SendReward for each winner via cross-app call
+                                        for (owner, _bet_amount, winnings, source_chain_id) in winners {
+                                            if winnings > Amount::ZERO {
+                                                let _response: native_fungible_abi::ExtendedResponse = self.runtime.call_application(
+                                                    true, // authenticated
+                                                    native_fungible_app_id,
+                                                    &native_fungible_abi::ExtendedOperation::SendReward {
+                                                        recipient: owner,
+                                                        amount: winnings,
+                                                        source_chain_id,
+                                                    },
+                                                );
+                                            }
+                                        }
+                                        
+                                        RoundsResponse::Ok
                                     },
-                                    Err(e) => panic!("Failed to resolve round and get winners: {}", e),
+                                    Err(e) => panic!("Failed to resolve round and distribute rewards: {}", e),
                                 }
                             },
                             None => panic!("No closed round to resolve"),

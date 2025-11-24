@@ -2607,6 +2607,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "native-fungible-abi"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "linera-sdk",
+ "serde",
+]
+
+[[package]]
 name = "ntapi"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3308,10 +3317,10 @@ dependencies = [
  "async-graphql",
  "bincode",
  "linera-sdk",
+ "native-fungible-abi",
  "num-bigint",
  "num-traits",
  "serde",
- "serde_json",
  "tokio",
 ]
 
