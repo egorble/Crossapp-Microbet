@@ -17,6 +17,7 @@ pub enum Message {
         owner: AccountOwner,
         amount: Amount,
         prediction: Prediction,
+        source_chain_id: String, // Chain ID of the sender
         source_owner: AccountOwner,
     },
 }

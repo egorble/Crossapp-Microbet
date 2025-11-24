@@ -103,6 +103,7 @@ impl Contract for MicrobetContract {
 
                 // Step 2: Place bet in Rounds app
                 if target_account.chain_id == self.runtime.chain_id() {
+                    // Same chain - no source_chain_id needed
                     let _rounds_response: rounds::RoundsResponse = self.runtime.call_application(
                         true,
                         rounds_app_id,
@@ -114,10 +115,12 @@ impl Contract for MicrobetContract {
                         },
                     );
                 } else {
+                    // Cross-chain - send message with SENDER'S chain_id
                     let message = Message::TransferWithPrediction {
                         owner: target_account.owner,
                         amount,
                         prediction,
+                        source_chain_id: self.runtime.chain_id().to_string(), // SENDER'S chain!
                         source_owner: owner,
                     };
                     self.runtime
@@ -197,13 +200,10 @@ impl Contract for MicrobetContract {
 
     async fn execute_message(&mut self, message: Self::Message) {
         match message {
-            Message::TransferWithPrediction { owner: _, amount, prediction, source_owner } => {
+            Message::TransferWithPrediction { owner: _, amount, prediction, source_chain_id, source_owner } => {
                 // Handle cross-chain transfer with prediction
-                // Place bet for source owner
+                // Place bet for source owner with SENDER'S chain_id
                 if let Some(rounds_app_id) = *self.state.rounds_app_id.get() {
-                    // Get chain_id before call_application to avoid borrow conflict
-                    let source_chain_id = self.runtime.chain_id().to_string();
-                    
                     let _response: rounds::RoundsResponse = self.runtime.call_application(
                         true,
                         rounds_app_id,
@@ -211,7 +211,7 @@ impl Contract for MicrobetContract {
                             owner: source_owner,
                             amount,
                             prediction: to_rounds_prediction(prediction),
-                            source_chain_id: Some(source_chain_id),
+                            source_chain_id: Some(source_chain_id), // Use SENDER'S chain from message!
                         },
                     );
                 }
