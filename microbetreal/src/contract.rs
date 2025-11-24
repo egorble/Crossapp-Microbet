@@ -6,320 +6,214 @@
 mod state;
 
 use linera_sdk::{
-    abis::fungible::{
-        Account as FungibleAccount, InitialState, Parameters,
-    },
-    linera_base_types::{Account, AccountOwner, ChainId, WithContractAbi, ApplicationId},
+    linera_base_types::{ApplicationId, ChainId, WithContractAbi},
     views::{RootView, View},
     Contract, ContractRuntime,
 };
-use native_fungible::{Message, TICKER_SYMBOL, ExtendedNativeFungibleTokenAbi, ExtendedOperation, ExtendedResponse, Prediction as NativePrediction};
-use self::state::NativeFungibleTokenState;
+use microbetreal::{Message, MicrobetAbi, ExtendedOperation, ExtendedResponse, Prediction};
+use self::state::MicrobetState;
 
-// Conversion between native_fungible::Prediction and rounds::Prediction
-fn to_rounds_prediction(pred: NativePrediction) -> rounds::Prediction {
+// Conversion function
+fn to_rounds_prediction(pred: Prediction) -> rounds::Prediction {
     match pred {
-        NativePrediction::Up => rounds::Prediction::Up,
-        NativePrediction::Down => rounds::Prediction::Down,
+        Prediction::Up => rounds::Prediction::Up,
+        Prediction::Down => rounds::Prediction::Down,
     }
 }
 
-pub struct NativeFungibleTokenContract {
-    state: NativeFungibleTokenState,
+pub struct MicrobetContract {
+    state: MicrobetState,
     runtime: ContractRuntime<Self>,
 }
 
-linera_sdk::contract!(NativeFungibleTokenContract);
+linera_sdk::contract!(MicrobetContract);
 
-impl WithContractAbi for NativeFungibleTokenContract {
-    type Abi = ExtendedNativeFungibleTokenAbi;
+impl WithContractAbi for MicrobetContract {
+    type Abi = MicrobetAbi;
 }
 
-impl Contract for NativeFungibleTokenContract {
+impl Contract for MicrobetContract {
     type Message = Message;
-    type Parameters = Parameters;
-    type InstantiationArgument = InitialState; // Just InitialState, rounds_app_id comes from Parameters
+    type Parameters = ();
+    type InstantiationArgument = ();
     type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
-        let state = NativeFungibleTokenState::load(runtime.root_view_storage_context())
+        let state = MicrobetState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
-        NativeFungibleTokenContract { state, runtime }
+        MicrobetContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, initial_state: Self::InstantiationArgument) {
-        // Validate that the application parameters were configured correctly.
-        assert!(
-            self.runtime.application_parameters().ticker_symbol == "NAT",
-            "Only NAT is accepted as ticker symbol"
-        );
-        
-        // Initialize balances
-        for (owner, amount) in initial_state.accounts {
-            let account = Account {
-                chain_id: self.runtime.chain_id(),
-                owner,
-            };
-            self.runtime.transfer(AccountOwner::CHAIN, account, amount);
-        }
-        
-        // Note: rounds_app_id will be set manually via a SetRoundsAppId operation after deployment
+    async fn instantiate(&mut self, _argument: Self::InstantiationArgument) {
+        // No initialization needed - apps configured via operations
     }
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
-            ExtendedOperation::Balance { owner } => {
-                let balance = self.runtime.owner_balance(owner);
-                ExtendedResponse::Balance(balance)
+            // Microbetreal-specific operations
+            ExtendedOperation::SetNativeAppId { native_app_id } => {
+                match native_app_id.parse::<ApplicationId>() {
+                    Ok(app_id) => {
+                        let typed_app_id: ApplicationId<native::NativeAbi> = app_id.with_abi();
+                        self.state.native_app_id.set(Some(typed_app_id));
+                        ExtendedResponse::Ok
+                    }
+                    Err(e) => {
+                        panic!("Failed to parse Native ApplicationId: {:?}", e);
+                    }
+                }
             }
 
-            ExtendedOperation::ChainBalance => {
-                let balance = self.runtime.chain_balance();
-                ExtendedResponse::ChainBalance(balance)
-            }
-
-            ExtendedOperation::TickerSymbol => {
-                ExtendedResponse::TickerSymbol(String::from(TICKER_SYMBOL))
+            ExtendedOperation::SetRoundsAppId { rounds_app_id } => {
+                match rounds_app_id.parse::<ApplicationId>() {
+                    Ok(app_id) => {
+                        let typed_app_id: ApplicationId<rounds::RoundsAbi> = app_id.with_abi();
+                        self.state.rounds_app_id.set(Some(typed_app_id));
+                        ExtendedResponse::Ok
+                    }
+                    Err(e) => {
+                        panic!("Failed to parse Rounds ApplicationId: {:?}", e);
+                    }
+                }
             }
 
             ExtendedOperation::Transfer {
                 owner,
                 amount,
                 target_account,
-                prediction,
+                prediction: Some(prediction),
             } => {
-                self.runtime
-                    .check_account_permission(owner)
-                    .expect("Permission for Transfer operation");
+                // Transfer with prediction - this is our main betting operation
+                let native_app_id = self.state.native_app_id.get()
+                    .expect("Native app ID not configured");
+                let rounds_app_id = self.state.rounds_app_id.get()
+                    .expect("Rounds app ID not configured");
 
-                let fungible_target_account = target_account;
-                let target_account = self.normalize_account(target_account);
+                // Step 1: Call Native app to transfer tokens
+                let _native_response: native::NativeResponse = self.runtime.call_application(
+                    true,
+                    native_app_id,
+                    &native::NativeOperation::Transfer {
+                        owner,
+                        amount,
+                        target_account,
+                    },
+                );
 
-                self.runtime.transfer(owner, target_account, amount);
-
-                // If prediction is provided, call Rounds app to place bet
-                if let Some(pred) = prediction {
-                    if let Some(rounds_app_id) = *self.state.rounds_app_id.get() {
-                        if target_account.chain_id == self.runtime.chain_id() {
-                            // Same chain - make cross-app call to Rounds app
-                            // IMPORTANT: Bet is placed for the SENDER (owner), not the receiver!
-                            let _response: rounds::RoundsResponse = self.runtime.call_application(
-                                true, // authenticated
-                                rounds_app_id,
-                                &rounds::RoundsOperation::PlaceBet {
-                                    owner, // ← ВИПРАВЛЕНО: sender робить ставку!
-                                    amount,
-                                    prediction: to_rounds_prediction(pred),
-                                    source_chain_id: None, // Same chain
-                                },
-                            );
-                        } else {
-                            // Cross-chain transfer - send message with prediction info
-                            let message = Message::TransferWithPrediction {
-                                owner: target_account.owner,
-                                amount,
-                                prediction: pred,
-                                source_chain_id: self.runtime.chain_id(),
-                                source_owner: owner, // sender робить ставку
-                            };
-                            self.runtime
-                                .prepare_message(message)
-                                .with_authentication()
-                                .send_to(target_account.chain_id);
-                        }
-                    }
+                // Step 2: Place bet in Rounds app
+                if target_account.chain_id == self.runtime.chain_id() {
+                    let _rounds_response: rounds::RoundsResponse = self.runtime.call_application(
+                        true,
+                        rounds_app_id,
+                        &rounds::RoundsOperation::PlaceBet {
+                            owner, // Sender makes the bet
+                            amount,
+                            prediction: to_rounds_prediction(prediction),
+                            source_chain_id: None,
+                        },
+                    );
                 } else {
-                    // No prediction - just send notify message for cross-chain
-                    self.transfer(fungible_target_account.chain_id);
+                    let message = Message::TransferWithPrediction {
+                        owner: target_account.owner,
+                        amount,
+                        prediction,
+                        source_owner: owner,
+                    };
+                    self.runtime
+                        .prepare_message(message)
+                        .with_authentication()
+                        .send_to(target_account.chain_id);
                 }
 
                 ExtendedResponse::Ok
             }
 
-            ExtendedOperation::Claim {
-                source_account,
-                amount,
-                target_account,
-                prediction,
-            } => {
-                self.runtime
-                    .check_account_permission(source_account.owner)
-                    .expect("Permission for Claim operation");
+            ExtendedOperation::SendReward { recipient, amount, source_chain_id } => {
+                // Called by Rounds to distribute rewards
+                let native_app_id = self.state.native_app_id.get()
+                    .expect("Native app ID not configured");
 
-                let fungible_source_account = source_account;
-                let fungible_target_account = target_account;
+                let target_chain = if let Some(source_chain_id_str) = &source_chain_id {
+                    source_chain_id_str.parse::<ChainId>().unwrap_or_else(|_| self.runtime.chain_id())
+                } else {
+                    self.runtime.chain_id()
+                };
 
-                let source_account = self.normalize_account(source_account);
-                let target_account = self.normalize_account(target_account);
+                let target_account = linera_sdk::abis::fungible::Account {
+                    chain_id: target_chain,
+                    owner: recipient,
+                };
 
-                self.runtime.claim(source_account, target_account, amount);
-                
-                // If prediction is provided, call Rounds app to place bet
-                if let Some(pred) = prediction {
-                    if let Some(rounds_app_id) = *self.state.rounds_app_id.get() {
-                        let _response: rounds::RoundsResponse = self.runtime.call_application(
-                            true, // authenticated
-                            rounds_app_id,
-                            &rounds::RoundsOperation::PlaceBet {
-                                owner: target_account.owner,
-                                amount,
-                                prediction: to_rounds_prediction(pred),
-                                source_chain_id: Some(source_account.chain_id.to_string()),
-                            },
-                        );
-                    }
-                }
+                let resolver_owner = self.runtime.authenticated_signer()
+                    .expect("Authentication required for reward distribution");
 
-                self.claim(
-                    fungible_source_account.chain_id,
-                    fungible_target_account.chain_id,
+                let _native_response: native::NativeResponse = self.runtime.call_application(
+                    true,
+                    native_app_id,
+                    &native::NativeOperation::Transfer {
+                        owner: resolver_owner,
+                        amount,
+                        target_account,
+                    },
+                );
+
+                ExtendedResponse::Ok
+            }
+
+            // Pass-through operations to Native app
+            ExtendedOperation::Transfer { owner, amount, target_account, prediction: None } => {
+                // Regular transfer without prediction - pass to Native
+                let native_app_id = self.state.native_app_id.get()
+                    .expect("Native app ID not configured");
+
+                let _response: native::NativeResponse = self.runtime.call_application(
+                    true,
+                    native_app_id,
+                    &native::NativeOperation::Transfer { owner, amount, target_account },
                 );
                 ExtendedResponse::Ok
             }
 
-            ExtendedOperation::Withdraw => {
-                // Get the current owner (authenticated signer)
-                let owner = self.runtime.authenticated_signer().unwrap();
-                // Get the balance for this owner
-                let balance = self.runtime.owner_balance(owner);
-                // Create target account (chain account)
-                let target_account = Account {
-                    chain_id: self.runtime.chain_id(),
-                    owner: AccountOwner::CHAIN,
-                };
-                // Transfer all tokens to the chain account
-                self.runtime.transfer(owner, target_account, balance);
+            ExtendedOperation::Claim { source_account, amount, target_account, prediction: None } => {
+                // Regular claim without prediction - pass to Native
+                let native_app_id = self.state.native_app_id.get()
+                    .expect("Native app ID not configured");
+
+                let _response: native::NativeResponse = self.runtime.call_application(
+                    true,
+                    native_app_id,
+                    &native::NativeOperation::Claim { source_account, amount, target_account },
+                );
                 ExtendedResponse::Ok
             }
 
-            ExtendedOperation::Mint { owner, amount } => {
-                // Create target account for the owner
-                let target_account = Account {
-                    chain_id: self.runtime.chain_id(),
-                    owner,
-                };
-                // Mint tokens by transferring from chain account to the target account
-                self.runtime.transfer(AccountOwner::CHAIN, target_account, amount);
-                ExtendedResponse::Ok
-            }
-
-            ExtendedOperation::SetRoundsAppId { rounds_app_id } => {
-                // Parse ApplicationId from string (as generic ApplicationId)
-                match rounds_app_id.parse::<ApplicationId>() {
-                    Ok(app_id) => {
-                        // Convert to typed ApplicationId using with_abi
-                        let typed_app_id: ApplicationId<rounds::RoundsAbi> = app_id.with_abi();
-                        self.state.rounds_app_id.set(Some(typed_app_id));
-                        ExtendedResponse::Ok
-                    }
-                    Err(e) => {
-                        panic!("Failed to parse ApplicationId: {:?}", e);
-                    }
-                }
-            }
-
-            ExtendedOperation::SendReward { recipient, amount, source_chain_id } => {
-                // This is called by Rounds app to distribute rewards
-                // Get the authenticated signer (the one who called ResolveRound on Rounds app)
-                let resolver_owner = self.runtime.authenticated_signer()
-                    .expect("Authentication required for reward distribution");
-                
-                if let Some(source_chain_id_str) = source_chain_id {
-                    // Cross-chain winner - send to their original chain
-                    match source_chain_id_str.parse::<ChainId>() {
-                        Ok(chain_id) => {
-                            let target_account = Account {
-                                chain_id,
-                                owner: recipient,
-                            };
-                            // Transfer from resolver's balance (admin who resolves the round)
-                            self.runtime.transfer(resolver_owner, target_account, amount);
-                            
-                            // Send notify message
-                            let message = Message::Notify;
-                            self.runtime
-                                .prepare_message(message)
-                                .with_authentication()
-                                .send_to(chain_id);
-                        }
-                        Err(_) => {
-                            // If parsing fails, send to local chain
-                            let target_account = Account {
-                                chain_id: self.runtime.chain_id(),
-                                owner: recipient,
-                            };
-                            self.runtime.transfer(resolver_owner, target_account, amount);
-                        }
-                    }
-                } else {
-                    // Local winner
-                    let target_account = Account {
-                        chain_id: self.runtime.chain_id(),
-                        owner: recipient,
-                    };
-                    self.runtime.transfer(resolver_owner, target_account, amount);
-                }
-                ExtendedResponse::Ok
+            _ => {
+                // All other operations: pass through to Native
+                panic!("Operation not supported by Microbetreal - use Native app directly for: {:?}", std::any::type_name_of_val(&operation));
             }
         }
     }
 
     async fn execute_message(&mut self, message: Self::Message) {
         match message {
-            Message::Notify => {
-                // Auto-deploy the application on this chain if it's not already deployed
-            }
-            Message::TransferWithPrediction { owner: _, amount, prediction, source_chain_id, source_owner } => {
+            Message::TransferWithPrediction { owner: _, amount, prediction, source_owner } => {
                 // Handle cross-chain transfer with prediction
-                // Make cross-app call to Rounds app to place bet
+                // Place bet for source owner
                 if let Some(rounds_app_id) = *self.state.rounds_app_id.get() {
+                    // Get chain_id before call_application to avoid borrow conflict
+                    let source_chain_id = self.runtime.chain_id().to_string();
+                    
                     let _response: rounds::RoundsResponse = self.runtime.call_application(
-                        true, // authenticated
+                        true,
                         rounds_app_id,
                         &rounds::RoundsOperation::PlaceBet {
                             owner: source_owner,
                             amount,
                             prediction: to_rounds_prediction(prediction),
-                            source_chain_id: Some(source_chain_id.to_string()),
+                            source_chain_id: Some(source_chain_id),
                         },
                     );
-                }
-            }
-            Message::SendReward { recipient, amount, source_chain_id } => {
-                // This message should not be received - SendReward is an Operation, not Message
-                // But we handle it anyway for safety
-                eprintln!("Warning: Received SendReward as message instead of operation");
-                
-                if let Some(source_chain_id_str) = source_chain_id {
-                    match source_chain_id_str.parse::<ChainId>() {
-                        Ok(chain_id) => {
-                            let target_account = Account {
-                                chain_id,
-                                owner: recipient,
-                            };
-                            self.runtime.transfer(AccountOwner::CHAIN, target_account, amount);
-                            
-                            let message = Message::Notify;
-                            self.runtime
-                                .prepare_message(message)
-                                .with_authentication()
-                                .send_to(chain_id);
-                        }
-                        Err(_) => {
-                            let target_account = Account {
-                                chain_id: self.runtime.chain_id(),
-                                owner: recipient,
-                            };
-                            self.runtime.transfer(AccountOwner::CHAIN, target_account, amount);
-                        }
-                    }
-                } else {
-                    let target_account = Account {
-                        chain_id: self.runtime.chain_id(),
-                        owner: recipient,
-                    };
-                    self.runtime.transfer(AccountOwner::CHAIN, target_account, amount);
                 }
             }
         }
@@ -327,39 +221,5 @@ impl Contract for NativeFungibleTokenContract {
 
     async fn store(mut self) {
         self.state.save().await.expect("Failed to save state");
-    }
-}
-
-impl NativeFungibleTokenContract {
-
-    
-    fn transfer(&mut self, chain_id: ChainId) {
-        if chain_id != self.runtime.chain_id() {
-            let message = Message::Notify;
-            self.runtime
-                .prepare_message(message)
-                .with_authentication()
-                .send_to(chain_id);
-        }
-    }
-
-    fn claim(&mut self, source_chain_id: ChainId, target_chain_id: ChainId) {
-        if source_chain_id == self.runtime.chain_id() {
-            self.transfer(target_chain_id);
-        } else {
-            // If different chain, send notify message so the app gets auto-deployed
-            let message = Message::Notify;
-            self.runtime
-                .prepare_message(message)
-                .with_authentication()
-                .send_to(source_chain_id);
-        }
-    }
-
-    fn normalize_account(&self, account: FungibleAccount) -> Account {
-        Account {
-            chain_id: account.chain_id,
-            owner: account.owner,
-        }
     }
 }

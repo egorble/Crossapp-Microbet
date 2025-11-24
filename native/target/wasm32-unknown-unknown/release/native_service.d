@@ -1,0 +1,1 @@
+/home/egor/antigravity/Microbet-main\ –\ копія/native/target/wasm32-unknown-unknown/release/native_service.wasm: /home/egor/antigravity/Microbet-main\ –\ копія/native/src/lib.rs /home/egor/antigravity/Microbet-main\ –\ копія/native/src/service.rs

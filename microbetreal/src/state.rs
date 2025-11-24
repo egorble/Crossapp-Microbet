@@ -4,11 +4,12 @@
 use linera_sdk::views::{linera_views, RegisterView, RootView, ViewStorageContext};
 use linera_sdk::linera_base_types::ApplicationId;
 
-/// The application state for the Native Fungible Token.
+/// Minimal state for Microbetreal - just stores app IDs for coordination
 #[derive(RootView)]
 #[view(context = ViewStorageContext)]
-pub struct NativeFungibleTokenState {
-    /// ApplicationId of the Rounds app (for cross-app calls)
-    /// Using generic ApplicationId with rounds::RoundsAbi type parameter
+pub struct MicrobetState {
+    /// ApplicationId of the Native token app
+    pub native_app_id: RegisterView<Option<ApplicationId<native::NativeAbi>>>,
+    /// ApplicationId of the Rounds game app
     pub rounds_app_id: RegisterView<Option<ApplicationId<rounds::RoundsAbi>>>,
 }

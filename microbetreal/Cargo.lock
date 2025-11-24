@@ -2558,6 +2558,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "microbetreal"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "linera-sdk",
+ "native",
+ "native-fungible-abi",
+ "rounds",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2607,18 +2620,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "native-fungible"
+name = "native"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
  "linera-sdk",
- "native-fungible-abi",
- "num-bigint",
- "num-traits",
- "rounds",
  "serde",
- "serde_json",
- "tokio",
 ]
 
 [[package]]

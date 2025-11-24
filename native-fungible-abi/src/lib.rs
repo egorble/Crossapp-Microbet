@@ -79,8 +79,10 @@ pub enum ExtendedOperation {
         amount: Amount,
     },
     
-    // Admin operations
-    /// Set the Rounds app ApplicationId
+    // Admin operations (for Microbetreal)
+    /// Set the Native token app ApplicationId (Microbetreal only)
+    SetNativeAppId { native_app_id: String },
+    /// Set the Rounds app ApplicationId (Microbetreal only)
     SetRoundsAppId { rounds_app_id: String },
     
     // Called by Rounds app to send rewards

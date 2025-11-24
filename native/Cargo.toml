@@ -1,0 +1,26 @@
+[package]
+name = "native"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+test = []
+
+[dependencies]
+linera-sdk = "0.15.6"
+async-graphql = { version = "7.0.17", default-features = false }
+serde = { version = "1.0", features = ["derive"] }
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+tokio = { version = "1.48" }
+
+[[bin]]
+name = "native_contract"
+path = "src/contract.rs"
+
+[[bin]]
+name = "native_service"
+path = "src/service.rs"

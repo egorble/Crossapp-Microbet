@@ -76,7 +76,7 @@ impl WithContractAbi for RoundsContract {
 impl Contract for RoundsContract {
     type Message = Message;
     type Parameters = (); // No parameters needed
-    type InstantiationArgument = Option<ApplicationId<native_fungible_abi::ExtendedNativeFungibleTokenAbi>>; // NativeFungible app ID
+    type InstantiationArgument = Option<ApplicationId>; // Microbetreal app ID (generic since we can't import microbetreal here)
     type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
@@ -86,10 +86,12 @@ impl Contract for RoundsContract {
         RoundsContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, native_fungible_app_id: Self::InstantiationArgument) {
-        // Store NativeFungible app ID if provided
-        if let Some(app_id) = native_fungible_app_id {
-            self.state.native_fungible_app_id.set(Some(app_id));
+    async fn instantiate(&mut self, microbetreal_app_id: Self::InstantiationArgument) {
+        // Store Microbetreal app ID if provided (we store as generic and cast when using)
+        if let Some(app_id) = microbetreal_app_id {
+            // Cast to native_fungible_abi type for storage compatibility
+            let typed_app_id: ApplicationId<native_fungible_abi::ExtendedNativeFungibleTokenAbi> = app_id.with_abi();
+            self.state.native_fungible_app_id.set(Some(typed_app_id));
         }
     }
 
@@ -127,16 +129,17 @@ impl Contract for RoundsContract {
                                 // Resolve the round and get winners
                                 match self.state.resolve_round_and_distribute_rewards(round.id, resolution_price, timestamp).await {
                                     Ok(winners) => {
-                                        // Get NativeFungible app ID
-                                        let native_fungible_app_id = self.state.native_fungible_app_id.get()
-                                            .expect("NativeFungible app ID not set");
+                                        // Get Microbetreal app ID (stored as ExtendedNativeFungibleTokenAbi for compatibility)
+                                        let microbetreal_app_id = self.state.native_fungible_app_id.get()
+                                            .expect("Microbetreal app ID not set");
                                         
-                                        // Call NativeFungible::SendReward for each winner via cross-app call
+                                        // Call Microbetreal::SendReward for each winner via cross-app call
+                                        // We use ExtendedOperation::SendReward which is implemented by Microbetreal
                                         for (owner, _bet_amount, winnings, source_chain_id) in winners {
                                             if winnings > Amount::ZERO {
                                                 let _response: native_fungible_abi::ExtendedResponse = self.runtime.call_application(
                                                     true, // authenticated
-                                                    native_fungible_app_id,
+                                                    microbetreal_app_id,
                                                     &native_fungible_abi::ExtendedOperation::SendReward {
                                                         recipient: owner,
                                                         amount: winnings,

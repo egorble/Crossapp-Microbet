@@ -42,7 +42,7 @@ fn calculate_winnings_proportional(bet_amount: Amount, winner_pool: Amount, tota
 #[derive(RootView)]
 #[view(context = ViewStorageContext)]
 pub struct RoundsState {
-    /// ApplicationId of the NativeFungible app (for sending SendReward operations)
+    /// ApplicationId of the Microbetreal app (for sending SendReward operations)
     pub native_fungible_app_id: RegisterView<Option<ApplicationId<native_fungible_abi::ExtendedNativeFungibleTokenAbi>>>,
     
     /// Counter for generating unique round IDs
