@@ -33,8 +33,16 @@ impl Service for MicrobetService {
     }
 
     async fn handle_query(&self, request: Request) -> Response {
+        use linera_sdk::views::View;
+        use crate::state::MicrobetState;
+        
+        // Load state for queries
+        let state = MicrobetState::load(self.runtime.root_view_storage_context())
+            .await
+            .expect("Failed to load state");
+        
         let schema = Schema::build(
-            QueryRoot {},
+            QueryRoot { state },
             MutationRoot {
                 runtime: self.runtime.clone(),
             },
@@ -45,11 +53,30 @@ impl Service for MicrobetService {
     }
 }
 
-struct QueryRoot {}
+mod state;
+
+struct QueryRoot {
+    state: state::MicrobetState,
+}
 
 #[Object]
 impl QueryRoot {
-    /// Placeholder query
+    /// Get the configured Native app ID
+    async fn native_app_id(&self) -> Option<String> {
+        self.state.native_app_id.get().as_ref().map(|id| format!("{}", id.forget_abi()))
+    }
+    
+    /// Get the configured Rounds app ID
+    async fn rounds_app_id(&self) -> Option<String> {
+        self.state.rounds_app_id.get().as_ref().map(|id| format!("{}", id.forget_abi()))
+    }
+    
+    /// Check if app IDs are configured
+    async fn is_configured(&self) -> bool {
+        self.state.native_app_id.get().is_some() && self.state.rounds_app_id.get().is_some()
+    }
+    
+    /// Get version
     async fn version(&self) -> String {
         "1.0.0".to_string()
     }
@@ -74,24 +101,37 @@ impl MutationRoot {
     }
 
     /// Transfer tokens with prediction (betting)
+    /// Optionally set app IDs on-the-fly
     async fn transfer_with_prediction(
         &self,
         owner: AccountOwner,
         amount: String,
         target_account: AccountInput,
         prediction: Prediction,
+        native_app_id: Option<String>,
+        rounds_app_id: Option<String>,
     ) -> String {
         let fungible_account = linera_sdk::abis::fungible::Account {
             chain_id: target_account.chain_id,
             owner: target_account.owner,
         };
         
+        // Check if we're updating app IDs
+        let updating_ids = native_app_id.is_some() || rounds_app_id.is_some();
+        
         self.runtime.schedule_operation(&ExtendedOperation::Transfer {
             owner,
             amount: amount.parse::<Amount>().unwrap_or_default(),
             target_account: fungible_account,
             prediction: Some(prediction),
+            native_app_id,
+            rounds_app_id,
         });
-        "TransferWithPrediction operation scheduled - tokens will be transferred and bet placed".to_string()
+        
+        if updating_ids {
+            "TransferWithPrediction operation scheduled - app IDs updated and bet will be placed".to_string()
+        } else {
+            "TransferWithPrediction operation scheduled - using existing app IDs".to_string()
+        }
     }
 }

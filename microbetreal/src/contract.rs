@@ -83,8 +83,32 @@ impl Contract for MicrobetContract {
                 amount,
                 target_account,
                 prediction: Some(prediction),
+                native_app_id,
+                rounds_app_id,
             } => {
                 // Transfer with prediction - this is our main betting operation
+                
+                // Save app IDs if provided (flexible configuration)
+                if let Some(nat_id) = native_app_id {
+                    match nat_id.parse::<ApplicationId>() {
+                        Ok(app_id) => {
+                            let typed_app_id: ApplicationId<native::NativeAbi> = app_id.with_abi();
+                            self.state.native_app_id.set(Some(typed_app_id));
+                        }
+                        Err(e) => eprintln!("Failed to parse Native ApplicationId: {:?}", e),
+                    }
+                }
+                
+                if let Some(rnd_id) = rounds_app_id {
+                    match rnd_id.parse::<ApplicationId>() {
+                        Ok(app_id) => {
+                            let typed_app_id: ApplicationId<rounds::RoundsAbi> = app_id.with_abi();
+                            self.state.rounds_app_id.set(Some(typed_app_id));
+                        }
+                        Err(e) => eprintln!("Failed to parse Rounds ApplicationId: {:?}", e),
+                    }
+                }
+                
                 let native_app_id = self.state.native_app_id.get()
                     .expect("Native app ID not configured");
                 let rounds_app_id = self.state.rounds_app_id.get()
@@ -165,7 +189,7 @@ impl Contract for MicrobetContract {
             }
 
             // Pass-through operations to Native app
-            ExtendedOperation::Transfer { owner, amount, target_account, prediction: None } => {
+            ExtendedOperation::Transfer { owner, amount, target_account, prediction: None, native_app_id: None, rounds_app_id: None } => {
                 // Regular transfer without prediction - pass to Native
                 let native_app_id = self.state.native_app_id.get()
                     .expect("Native app ID not configured");
