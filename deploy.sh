@@ -30,7 +30,8 @@ echo "Deploying native..."
 # WARNING: This assumes Native app instantiation is simple.
 NATIVE_ID=$(linera publish-and-create \
     native/target/wasm32-unknown-unknown/release/native_{contract,service}.wasm \
-    --json-argument "{\"accounts\":{}}")
+    --json-argument "{\"accounts\":{}}" \
+    --json-parameters "{\"ticker_symbol\":\"NAT\"}")
 
 echo "Native deployed with ID: $NATIVE_ID"
 
@@ -40,8 +41,7 @@ echo "Deploying rounds..."
 # Instantiation argument: ()
 ROUNDS_ID=$(linera publish-and-create \
     rounds/target/wasm32-unknown-unknown/release/rounds_{contract,service}.wasm \
-    --json-parameters "{\"native_app_id\":\"$NATIVE_ID\"}" \
-    --json-argument "null")
+    --json-parameters "{\"native_app_id\":\"$NATIVE_ID\"}")
 
 echo "Rounds deployed with ID: $ROUNDS_ID"
 
@@ -51,8 +51,7 @@ echo "Deploying microbetreal..."
 # Instantiation argument: ()
 MICROBETREAL_ID=$(linera publish-and-create \
     microbetreal/target/wasm32-unknown-unknown/release/microbetreal_{contract,service}.wasm \
-    --json-parameters "{\"native_app_id\":\"$NATIVE_ID\", \"rounds_app_id\":\"$ROUNDS_ID\"}" \
-    --json-argument "null")
+    --json-parameters "{\"native_app_id\":\"$NATIVE_ID\", \"rounds_app_id\":\"$ROUNDS_ID\"}")
 
 echo "Microbetreal deployed with ID: $MICROBETREAL_ID"
 
