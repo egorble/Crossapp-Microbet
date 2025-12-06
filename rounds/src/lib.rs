@@ -82,6 +82,7 @@ impl ServiceAbi for RoundsAbi {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct RoundsParameters {
     pub native_app_id: ::linera_sdk::linera_base_types::ApplicationId,
+    pub leaderboard_app_id: ::linera_sdk::linera_base_types::ApplicationId,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

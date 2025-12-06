@@ -1,0 +1,4 @@
+cargo:rustc-check-cfg=cfg(with_testing)
+cargo:rustc-check-cfg=cfg(with_wasmer)
+cargo:rustc-check-cfg=cfg(with_wasmtime)
+cargo:rustc-check-cfg=cfg(with_wit_export)

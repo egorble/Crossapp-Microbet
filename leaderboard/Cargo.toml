@@ -1,0 +1,26 @@
+[package]
+name = "leaderboard"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+test = []
+
+[dependencies]
+linera-sdk = "0.15.7"
+async-graphql = { version = "7.0.17", default-features = false }
+serde = { version = "1.0", features = ["derive"] }
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+tokio = { version = "1.48" }
+
+[[bin]]
+name = "leaderboard_contract"
+path = "src/contract.rs"
+
+[[bin]]
+name = "leaderboard_service"
+path = "src/service.rs"

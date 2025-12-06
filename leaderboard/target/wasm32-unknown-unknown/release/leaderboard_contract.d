@@ -1,0 +1,1 @@
+/home/egor/antigravity/Microbet-main\ –\ копія/leaderboard/target/wasm32-unknown-unknown/release/leaderboard_contract.wasm: /home/egor/antigravity/Microbet-main\ –\ копія/leaderboard/src/contract.rs /home/egor/antigravity/Microbet-main\ –\ копія/leaderboard/src/lib.rs /home/egor/antigravity/Microbet-main\ –\ копія/leaderboard/src/state.rs

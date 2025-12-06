@@ -137,14 +137,16 @@ impl Contract for RoundsContract {
                             Some(round) => {
                                 // Resolve the round and get winners
                                 match self.state.resolve_round_and_distribute_rewards(round.id, resolution_price, timestamp).await {
-                                    Ok(winners) => {
-                                        // Get Microbetreal app ID
+                                    Ok(results) => {
+                                        // Get app IDs
+                                        let params = self.runtime.application_parameters();
+                                        let leaderboard_app_id = params.leaderboard_app_id.with_abi::<leaderboard::LeaderboardAbi>();
+                                        
                                         let microbetreal_app_id = self.state.microbet_app_id.get()
                                             .expect("Microbetreal app ID not set");
                                         
-                                        // Call Microbetreal::SendReward for each winner via cross-app call
-                                        // We use ExtendedOperation::SendReward which is implemented by Microbetreal
-                                        for (owner, _bet_amount, winnings, source_chain_id) in winners {
+                                        for (owner, bet_amount, winnings, is_win, source_chain_id) in results {
+                                            // Distribute rewards if any
                                             if winnings > Amount::ZERO {
                                                 let _response: native_fungible_abi::ExtendedResponse = self.runtime.call_application(
                                                     true, // authenticated
@@ -152,15 +154,33 @@ impl Contract for RoundsContract {
                                                     &native_fungible_abi::ExtendedOperation::SendReward {
                                                         recipient: owner,
                                                         amount: winnings,
-                                                        source_chain_id,
+                                                        source_chain_id: source_chain_id.clone(),
                                                     },
                                                 );
                                             }
+
+                                            // Update leaderboard stats (for everyone)
+                                            // Use source_chain_id or default to current chain (which might be wrong for local bets? 
+                                            // Local bets usually don't have source_chain_id set? 
+                                            // RoundsState::place_bet sets source_chain_id. If None, it means same chain.
+                                            // Leaderboard expects a string chain_id.
+                                            let chain_id_str = source_chain_id.unwrap_or_else(|| self.runtime.chain_id().to_string());
+                                            
+                                            let _response: () = self.runtime.call_application(
+                                                true,
+                                                leaderboard_app_id,
+                                                &leaderboard::Operation::UpdateScore {
+                                                    owner,
+                                                    chain_id: chain_id_str,
+                                                    is_win,
+                                                    amount: if is_win { winnings } else { bet_amount },
+                                                }
+                                            );
                                         }
                                         
                                         RoundsResponse::Ok
                                     },
-                                    Err(e) => panic!("Failed to resolve round and distribute rewards: {}", e),
+                                    Err(e) => panic!("Failed to resolve round: {}", e),
                                 }
                             },
                             None => panic!("No closed round to resolve"),
@@ -218,12 +238,23 @@ impl Contract for RoundsContract {
             RoundsOperation::GetActiveBets => {
                 match self.state.get_active_bets().await {
                     Ok(bets) => {
-                        let active_bets: Vec<_> = bets.into_iter().map(|(owner, bet)| {
-                            rounds::ActiveBetInfo {
-                                owner,
-                                amount: bet.amount,
-                                prediction: prediction_to_lib(bet.prediction),
+                        let active_bets: Vec<_> = bets.into_iter().flat_map(|(owner, bet)| {
+                            let mut list = Vec::new();
+                            if !bet.amount_up.is_zero() {
+                                list.push(rounds::ActiveBetInfo {
+                                    owner,
+                                    amount: bet.amount_up,
+                                    prediction: Prediction::Up,
+                                });
                             }
+                            if !bet.amount_down.is_zero() {
+                                list.push(rounds::ActiveBetInfo {
+                                    owner,
+                                    amount: bet.amount_down,
+                                    prediction: Prediction::Down,
+                                });
+                            }
+                            list
                         }).collect();
                         RoundsResponse::ActiveBets(active_bets)
                     },

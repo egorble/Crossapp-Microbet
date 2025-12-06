@@ -12,22 +12,35 @@ NATIVE_ID=$(linera project publish-and-create native \
     --json-parameters "{\"ticker_symbol\":\"NAT\"}")
 
 echo "Native deployed with ID: $NATIVE_ID"
+echo "NATIVE=$NATIVE_ID" > app_ids.txt
+
+# Deploy leaderboard
+echo "Deploying leaderboard..."
+# Leaderboard takes no init args/params (empty structs)
+LEADERBOARD_ID=$(linera project publish-and-create leaderboard)
+
+echo "Leaderboard deployed with ID: $LEADERBOARD_ID"
+echo "Leaderboard=$LEADERBOARD_ID" >> app_ids.txt
 
 # Deploy rounds
 echo "Deploying rounds..."
 # Points to 'rounds' directory
+# Parameters: native_app_id, leaderboard_app_id
 ROUNDS_ID=$(linera project publish-and-create rounds \
-    --json-parameters "{\"native_app_id\":\"$NATIVE_ID\"}")
+    --json-parameters "{\"native_app_id\":\"$NATIVE_ID\", \"leaderboard_app_id\":\"$LEADERBOARD_ID\"}")
 
 echo "Rounds deployed with ID: $ROUNDS_ID"
+echo "ROUNDS=$ROUNDS_ID" >> app_ids.txt
 
 # Deploy microbetreal
 echo "Deploying microbetreal..."
 # Points to 'microbetreal' directory
 MICROBETREAL_ID=$(linera project publish-and-create microbetreal \
-    --json-parameters "{\"native_app_id\":\"$NATIVE_ID\", \"rounds_app_id\":\"$ROUNDS_ID\"}")
+    --json-parameters "{\"native_app_id\":\"$NATIVE_ID\", \"rounds_app_id\":\"$ROUNDS_ID\"}" \
+    --required-application-ids "$NATIVE_ID" "$ROUNDS_ID")
 
 echo "Microbetreal deployed with ID: $MICROBETREAL_ID"
+echo "MICROBETREAL=$MICROBETREAL_ID" >> app_ids.txt
 
 # Link microbetreal to rounds
 echo "Linking rounds to microbetreal..."

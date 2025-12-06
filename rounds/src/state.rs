@@ -17,7 +17,7 @@ fn calculate_winnings_proportional(bet_amount: Amount, winner_pool: Amount, tota
     let winner_pool_u128: u128 = u128::from(winner_pool);
     let total_prize_pool_u128: u128 = u128::from(total_prize_pool);
     
-    // Check for division by zero
+    // Check for division by zero (and empty winner pool)
     if winner_pool_u128 == 0 {
         return Amount::ZERO;
     }
@@ -92,8 +92,8 @@ pub enum RoundStatus {
 #[derive(Debug, Clone, Serialize, Deserialize, SimpleObject)]
 pub struct PredictionBet {
     pub owner: AccountOwner,
-    pub amount: Amount,
-    pub prediction: Prediction,
+    pub amount_up: Amount,
+    pub amount_down: Amount,
     pub claimed: bool,
     pub source_chain_id: Option<String>, // Add source chain ID for cross-chain bets
 }
@@ -177,17 +177,17 @@ impl RoundsState {
             for owner in &active_bet_indices {
                 if let Some(bet) = self.active_bets.get(owner).await
                     .map_err(|e: ViewError| format!("Failed to get active bet: {:?}", e))? {
-                    match bet.prediction {
-                        Prediction::Up => {
-                            up_bets += 1;
-                            up_bets_pool = up_bets_pool.saturating_add(bet.amount);
-                        },
-                        Prediction::Down => {
-                            down_bets += 1;
-                            down_bets_pool = down_bets_pool.saturating_add(bet.amount);
-                        },
+                    
+                    if !bet.amount_up.is_zero() {
+                        up_bets += 1;
+                        up_bets_pool = up_bets_pool.saturating_add(bet.amount_up);
+                        prize_pool = prize_pool.saturating_add(bet.amount_up);
                     }
-                    prize_pool = prize_pool.saturating_add(bet.amount);
+                    if !bet.amount_down.is_zero() {
+                        down_bets += 1;
+                        down_bets_pool = down_bets_pool.saturating_add(bet.amount_down);
+                        prize_pool = prize_pool.saturating_add(bet.amount_down);
+                    }
                     
                     // Collect bets to move for later processing
                     bets_to_move.push((owner.clone(), bet));
@@ -260,8 +260,9 @@ impl RoundsState {
     
 
     
-    /// Resolve a closed round and return list of winners for reward distribution
-    pub async fn resolve_round_and_distribute_rewards(&mut self, round_id: u64, resolution_price: Amount, timestamp: u64) -> Result<Vec<(AccountOwner, Amount, Amount, Option<String>)>, String> {
+    /// Resolve a closed round and return list of all bets with their outcomes for reward distribution and stats
+    /// Returns: Vec<(AccountOwner, bet_amount, winnings, is_win, source_chain_id)>
+    pub async fn resolve_round_and_distribute_rewards(&mut self, round_id: u64, resolution_price: Amount, timestamp: u64) -> Result<Vec<(AccountOwner, Amount, Amount, bool, Option<String>)>, String> {
         let mut round = self.rounds.get(&round_id).await
             .map_err(|e: ViewError| format!("Failed to get round: {:?}", e))?
             .ok_or("Round not found")?
@@ -287,7 +288,7 @@ impl RoundsState {
         round.resolved_at = Some(timestamp);
         round.resolution_price = Some(resolution_price);
         
-        self.rounds.insert(&round_id, round)
+        self.rounds.insert(&round_id, round.clone())
             .map_err(|e: ViewError| format!("Failed to update round: {:?}", e))?;
         
         // Move closed bets to resolved bets
@@ -309,18 +310,99 @@ impl RoundsState {
         }
         
         // Move bets in batch
-        for (bet_key, bet) in bets_to_move {
-            self.resolved_bets.insert(&bet_key, bet)
+        for (bet_key, bet) in &bets_to_move {
+            self.resolved_bets.insert(bet_key, bet.clone())
                 .map_err(|e: ViewError| format!("Failed to move bet to resolved: {:?}", e))?;
             self.closed_bets.remove(&bet_key)
                 .map_err(|e: ViewError| format!("Failed to remove closed bet: {:?}", e))?;
         }
         
-        // Get winners for reward distribution
-        let winners = self.get_round_winners(round_id).await
-            .map_err(|e| format!("Failed to get round winners: {:?}", e))?;
+        // Initialize results vector
+        let mut results = Vec::new();
         
-        Ok(winners)
+        // Calculate total prize pool and winner pool for calculations
+        let total_prize_pool = round.prize_pool;
+        let winner_pool = match result {
+            Some(Prediction::Up) => round.up_bets_pool,
+            Some(Prediction::Down) => round.down_bets_pool,
+            None => Amount::ZERO,
+        };
+
+        // Reuse bets_to_move (which contains all bets for this round) to generate results
+        for (_, bet) in &bets_to_move {
+             let mut winnings = Amount::ZERO;
+             let mut total_wagered = bet.amount_up.saturating_add(bet.amount_down); 
+             // Note: total_wagered is used for "amount" in simple reporting, but for split results we might need logic.
+             // The requirements say for leaderboard: UpdateScore { won/loss, amount }.
+             // If user bet both:
+             // 1. UP wins: amount_up wins. amount_down loses.
+             // 2. DOWN wins: amount_down wins. amount_up loses.
+             // 3. Draw: both lose (or refunded? Currently logic says "no one wins" if Draw).
+             
+             let is_win = match result {
+                Some(Prediction::Up) => !bet.amount_up.is_zero(),
+                Some(Prediction::Down) => !bet.amount_down.is_zero(),
+                None => false, 
+             };
+
+             if !winner_pool.is_zero() {
+                 match result {
+                    Some(Prediction::Up) => {
+                         if !bet.amount_up.is_zero() {
+                             winnings = calculate_winnings_proportional(bet.amount_up, winner_pool, total_prize_pool);
+                         }
+                    },
+                    Some(Prediction::Down) => {
+                         if !bet.amount_down.is_zero() {
+                             winnings = calculate_winnings_proportional(bet.amount_down, winner_pool, total_prize_pool);
+                         }
+                    },
+                    None => {},
+                 }
+             }
+             
+             // For the simplified return type (AccountOwner, Amount, Amount, bool, Option<String>), 
+             // we need to return the RELEVANT bet amount.
+             // If Up won, relevant bet amount is amount_up.
+             // If Down won, relevant bet amount is amount_down.
+             // But we also need to report LOSSES for the other side.
+             // The current signature allows only one entry per user.
+             // Refactoring signature to return BOTH results if needed? or simply sending the NET outcome?
+             // Leaderboard expects specific stats.
+             // Let's modify the signature or return logic to handle this.
+             // Actually, `contract.rs` iterates this. We can return multiple entries per user? No, map key is unique.
+             // But `results` is a Vec. We can push multiple entries! 
+             // Ah, but `results` in this function signature is `Vec<(AccountOwner, Amount, Amount, bool, Option<String>)>`.
+             // We can push two entries if needed: one for win, one for loss.
+             
+             let mut pushed = false;
+             
+             // Handle UP bet
+             if !bet.amount_up.is_zero() {
+                 let up_won = result == Some(Prediction::Up);
+                 let up_winnings = if up_won { winnings } else { Amount::ZERO }; // If Up won, winnings is calculated above. If Down won/draw, 0.
+                 // Wait, `winnings` above logic was: if UP wins, calc based on amount_up.
+                 
+                 results.push((bet.owner, bet.amount_up, up_winnings, up_won, bet.source_chain_id.clone()));
+                 pushed = true;
+             }
+             
+             // Handle DOWN bet
+             if !bet.amount_down.is_zero() {
+                 let down_won = result == Some(Prediction::Down);
+                 let down_winnings = if down_won { winnings } else { Amount::ZERO }; // If Down won...
+                 
+                 results.push((bet.owner, bet.amount_down, down_winnings, down_won, bet.source_chain_id.clone()));
+                 pushed = true;
+             }
+             
+             if !pushed {
+                 // Should not happen for active bets, but safe guard
+                 results.push((bet.owner, Amount::ZERO, Amount::ZERO, false, bet.source_chain_id.clone()));
+             }
+        }
+        
+        Ok(results)
     }
     
 
@@ -340,43 +422,72 @@ impl RoundsState {
             }
             
             // Check if user already placed a bet
-            let has_bet = self.active_bets.contains_key(&owner).await
+            let existing_bet = self.active_bets.get(&owner).await
                 .map_err(|e: ViewError| format!("Failed to check bet existence: {:?}", e))?;
-            if has_bet {
-                return Err("User already placed a bet in this round".to_string());
-            }
             
-            // Record the bet
-            let bet = PredictionBet {
-                owner,
-                amount,
-                prediction,
-                claimed: false,
-                source_chain_id, // Include source chain ID
+            let bet = if let Some(mut old_bet) = existing_bet {
+                // Update existing bet
+                match prediction {
+                    Prediction::Up => {
+                        // Increment counter only if this side was previously empty (new unique bettor for this side)
+                        // Actually, logic is messy if we count unique bettors. Simplest is: don't increment counters on update. 
+                        // But if they had 0 on Up and now bet on Up, they ARE a new Up bettor.
+                        if old_bet.amount_up.is_zero() {
+                            round.up_bets += 1;
+                        }
+                        old_bet.amount_up = old_bet.amount_up.saturating_add(amount);
+                    },
+                    Prediction::Down => {
+                         if old_bet.amount_down.is_zero() {
+                            round.down_bets += 1;
+                        }
+                        old_bet.amount_down = old_bet.amount_down.saturating_add(amount);
+                    }
+                }
+                old_bet
+            } else {
+                // New bet
+                let (amount_up, amount_down) = match prediction {
+                    Prediction::Up => {
+                        round.up_bets += 1;
+                        (amount, Amount::ZERO)
+                    },
+                    Prediction::Down => {
+                        round.down_bets += 1;
+                        (Amount::ZERO, amount)
+                    },
+                };
+                
+                PredictionBet {
+                    owner,
+                    amount_up,
+                    amount_down,
+                    claimed: false,
+                    source_chain_id,
+                }
             };
             
             self.active_bets.insert(&owner, bet)
                 .map_err(|e: ViewError| format!("Failed to place bet: {:?}", e))?;
             
-            // Update round statistics
+            // Update global pools and prize pool
             match prediction {
                 Prediction::Up => {
-                    round.up_bets += 1;
                     round.up_bets_pool = round.up_bets_pool.saturating_add(amount);
                 },
                 Prediction::Down => {
-                    round.down_bets += 1;
                     round.down_bets_pool = round.down_bets_pool.saturating_add(amount);
                 },
             }
             round.prize_pool = round.prize_pool.saturating_add(amount);
             
             // Save updated round
-            self.rounds.insert(&round_id, round)
+            self.rounds.insert(&round_id, round.clone())
                 .map_err(|e: ViewError| format!("Failed to update round statistics: {:?}", e))?;
         } else {
             return Err("No active round".to_string());
         }
+
         
         Ok(())
     }
@@ -465,15 +576,32 @@ impl RoundsState {
                 .map_err(|e: ViewError| format!("Failed to get bet: {:?}", e))? {
                 
                 // Only include winners who haven't claimed yet
-                if bet.prediction == result && !bet.claimed {
-                    // Calculate winnings properly
-                    let winnings = if !winner_pool.is_zero() {
-                        calculate_winnings_proportional(bet.amount, winner_pool, total_prize_pool)
-                    } else {
-                        Amount::ZERO
-                    };
+                // Logic check: verify they won on the winning side and haven't claimed
+                // Since `claimed` is a single bool, it's global for the user in this round.
+                // Assuming "claimed" means "claimed everything".
+                
+                if !bet.claimed { // Not yet claimed
+                    let mut winnings = Amount::ZERO;
+                    let mut bet_amount = Amount::ZERO;
                     
-                    winners.push((owner, bet.amount, winnings, bet.source_chain_id.clone()));
+                    match result {
+                        Prediction::Up => {
+                            if !bet.amount_up.is_zero() {
+                                bet_amount = bet.amount_up;
+                                winnings = calculate_winnings_proportional(bet.amount_up, winner_pool, total_prize_pool);
+                            }
+                        },
+                        Prediction::Down => {
+                            if !bet.amount_down.is_zero() {
+                                bet_amount = bet.amount_down;
+                                winnings = calculate_winnings_proportional(bet.amount_down, winner_pool, total_prize_pool);
+                            }
+                        }
+                    }
+                    
+                    if !winnings.is_zero() {
+                        winners.push((owner, bet_amount, winnings, bet.source_chain_id.clone()));
+                    }
                 }
             }
         }

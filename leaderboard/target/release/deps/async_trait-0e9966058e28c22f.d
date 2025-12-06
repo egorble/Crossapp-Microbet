@@ -1,0 +1,12 @@
+/home/egor/antigravity/Microbet-main – копія/leaderboard/target/release/deps/libasync_trait-0e9966058e28c22f.so: /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-trait-0.1.89/src/lib.rs /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-trait-0.1.89/src/args.rs /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-trait-0.1.89/src/bound.rs /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-trait-0.1.89/src/expand.rs /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-trait-0.1.89/src/lifetime.rs /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-trait-0.1.89/src/parse.rs /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-trait-0.1.89/src/receiver.rs /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-trait-0.1.89/src/verbatim.rs
+
+/home/egor/antigravity/Microbet-main – копія/leaderboard/target/release/deps/async_trait-0e9966058e28c22f.d: /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-trait-0.1.89/src/lib.rs /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-trait-0.1.89/src/args.rs /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-trait-0.1.89/src/bound.rs /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-trait-0.1.89/src/expand.rs /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-trait-0.1.89/src/lifetime.rs /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-trait-0.1.89/src/parse.rs /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-trait-0.1.89/src/receiver.rs /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-trait-0.1.89/src/verbatim.rs
+
+/home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-trait-0.1.89/src/lib.rs:
+/home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-trait-0.1.89/src/args.rs:
+/home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-trait-0.1.89/src/bound.rs:
+/home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-trait-0.1.89/src/expand.rs:
+/home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-trait-0.1.89/src/lifetime.rs:
+/home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-trait-0.1.89/src/parse.rs:
+/home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-trait-0.1.89/src/receiver.rs:
+/home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/async-trait-0.1.89/src/verbatim.rs:

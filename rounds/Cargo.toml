@@ -7,13 +7,14 @@ edition = "2021"
 test = []
 
 [dependencies]
-linera-sdk = "0.15.6"
+linera-sdk = "0.15.7"
 async-graphql = { version = "7.0.17", default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 bincode = "1.3"
 num-bigint = "0.4"
 num-traits = "0.2"
 native-fungible-abi = { path = "../native-fungible-abi" }
+leaderboard = { path = "../leaderboard" }
 
 [lib]
 crate-type = ["cdylib", "rlib"]

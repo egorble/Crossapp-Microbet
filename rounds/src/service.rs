@@ -205,15 +205,24 @@ impl QueryRoot {
             Ok(state) => {
                 match state.get_active_bets().await {
                     Ok(bets) => {
-                        bets.into_iter().map(|(owner, bet)| {
-                            LibActiveBetInfo {
-                                owner,
-                                amount: bet.amount,
-                                prediction: match bet.prediction {
-                                    self::state::Prediction::Up => Prediction::Up,
-                                    self::state::Prediction::Down => Prediction::Down,
-                                },
+
+                        bets.into_iter().flat_map(|(owner, bet)| {
+                            let mut list = Vec::new();
+                            if !bet.amount_up.is_zero() {
+                                list.push(LibActiveBetInfo {
+                                    owner,
+                                    amount: bet.amount_up,
+                                    prediction: Prediction::Up,
+                                });
                             }
+                            if !bet.amount_down.is_zero() {
+                                list.push(LibActiveBetInfo {
+                                    owner,
+                                    amount: bet.amount_down,
+                                    prediction: Prediction::Down,
+                                });
+                            }
+                            list
                         }).collect()
                     },
                     Err(_) => Vec::new(),
@@ -253,6 +262,12 @@ struct MutationRoot {
 
 #[Object]
 impl MutationRoot {
+    /// Set the Microbetreal Application Id
+    async fn set_microbet_app_id(&self, microbet_app_id: String) -> String {
+        self.runtime.schedule_operation(&RoundsOperation::SetMicrobetAppId { microbet_app_id });
+        "SetMicrobetAppId operation scheduled".to_string()
+    }
+
     /// Create a new prediction round
     async fn create_round(&self) -> String {
         self.runtime.schedule_operation(&RoundsOperation::CreateRound);

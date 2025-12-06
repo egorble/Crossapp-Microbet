@@ -1,0 +1,11 @@
+/home/egor/antigravity/Microbet-main – копія/leaderboard/target/release/deps/libpest_generator-2276097ad3b19152.rmeta: /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pest_generator-2.8.4/src/lib.rs /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pest_generator-2.8.4/src/macros.rs /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pest_generator-2.8.4/src/docs.rs /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pest_generator-2.8.4/src/generator.rs /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pest_generator-2.8.4/src/parse_derive.rs
+
+/home/egor/antigravity/Microbet-main – копія/leaderboard/target/release/deps/libpest_generator-2276097ad3b19152.rlib: /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pest_generator-2.8.4/src/lib.rs /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pest_generator-2.8.4/src/macros.rs /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pest_generator-2.8.4/src/docs.rs /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pest_generator-2.8.4/src/generator.rs /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pest_generator-2.8.4/src/parse_derive.rs
+
+/home/egor/antigravity/Microbet-main – копія/leaderboard/target/release/deps/pest_generator-2276097ad3b19152.d: /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pest_generator-2.8.4/src/lib.rs /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pest_generator-2.8.4/src/macros.rs /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pest_generator-2.8.4/src/docs.rs /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pest_generator-2.8.4/src/generator.rs /home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pest_generator-2.8.4/src/parse_derive.rs
+
+/home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pest_generator-2.8.4/src/lib.rs:
+/home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pest_generator-2.8.4/src/macros.rs:
+/home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pest_generator-2.8.4/src/docs.rs:
+/home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pest_generator-2.8.4/src/generator.rs:
+/home/egor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pest_generator-2.8.4/src/parse_derive.rs:
