@@ -22,6 +22,12 @@ pub enum Message {
     },
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct MicrobetParameters {
+    pub native_app_id: ::linera_sdk::linera_base_types::ApplicationId,
+    pub rounds_app_id: ::linera_sdk::linera_base_types::ApplicationId,
+}
+
 // Microbetreal implements the same ABI as NativeFungible (ExtendedNativeFungibleTokenAbi)
 // This allows Rounds to call operations on Microbetreal using the shared ABI
 // Microbetreal handles: TransferWithPrediction, SendReward, SetNativeAppId, SetRoundsAppId

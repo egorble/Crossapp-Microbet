@@ -79,6 +79,11 @@ impl ServiceAbi for RoundsAbi {
     type QueryResponse = Response;
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct RoundsParameters {
+    pub native_app_id: ::linera_sdk::linera_base_types::ApplicationId,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub enum RoundsOperation {
     // Round management operations
@@ -99,6 +104,10 @@ pub enum RoundsOperation {
     },
     /// Claim winnings from a resolved round (called by user directly)
     ClaimWinnings { round_id: u64 },
+    
+    // Configuration operations
+    /// Set the Microbetreal app ID (called after deployment)
+    SetMicrobetAppId { microbet_app_id: String },
 
     // Query operations for prediction game state
     /// Get the active round

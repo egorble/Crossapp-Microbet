@@ -34,7 +34,7 @@ impl WithContractAbi for MicrobetContract {
 
 impl Contract for MicrobetContract {
     type Message = Message;
-    type Parameters = ();
+    type Parameters = microbetreal::MicrobetParameters;
     type InstantiationArgument = ();
     type EventValue = ();
 
@@ -45,37 +45,22 @@ impl Contract for MicrobetContract {
         MicrobetContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, _argument: Self::InstantiationArgument) {
-        // No initialization needed - apps configured via operations
+    async fn instantiate(&mut self, _arg: Self::InstantiationArgument) {
+        // Validation (optional)
+        let _ = self.runtime.application_parameters();
     }
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
             // Microbetreal-specific operations
-            ExtendedOperation::SetNativeAppId { native_app_id } => {
-                match native_app_id.parse::<ApplicationId>() {
-                    Ok(app_id) => {
-                        let typed_app_id: ApplicationId<native::NativeAbi> = app_id.with_abi();
-                        self.state.native_app_id.set(Some(typed_app_id));
-                        ExtendedResponse::Ok
-                    }
-                    Err(e) => {
-                        panic!("Failed to parse Native ApplicationId: {:?}", e);
-                    }
-                }
+            ExtendedOperation::SetNativeAppId { .. } => {
+                // Disabled - set during initialization
+                panic!("SetNativeAppId is disabled - configured at initialization");
             }
 
-            ExtendedOperation::SetRoundsAppId { rounds_app_id } => {
-                match rounds_app_id.parse::<ApplicationId>() {
-                    Ok(app_id) => {
-                        let typed_app_id: ApplicationId<rounds::RoundsAbi> = app_id.with_abi();
-                        self.state.rounds_app_id.set(Some(typed_app_id));
-                        ExtendedResponse::Ok
-                    }
-                    Err(e) => {
-                        panic!("Failed to parse Rounds ApplicationId: {:?}", e);
-                    }
-                }
+            ExtendedOperation::SetRoundsAppId { .. } => {
+                // Disabled - set during initialization
+                panic!("SetRoundsAppId is disabled - configured at initialization");
             }
 
             ExtendedOperation::Transfer {
@@ -83,36 +68,14 @@ impl Contract for MicrobetContract {
                 amount,
                 target_account,
                 prediction: Some(prediction),
-                native_app_id,
-                rounds_app_id,
             } => {
                 // Transfer with prediction - this is our main betting operation
                 
-                // Save app IDs if provided (flexible configuration)
-                if let Some(nat_id) = native_app_id {
-                    match nat_id.parse::<ApplicationId>() {
-                        Ok(app_id) => {
-                            let typed_app_id: ApplicationId<native::NativeAbi> = app_id.with_abi();
-                            self.state.native_app_id.set(Some(typed_app_id));
-                        }
-                        Err(e) => eprintln!("Failed to parse Native ApplicationId: {:?}", e),
-                    }
-                }
+
                 
-                if let Some(rnd_id) = rounds_app_id {
-                    match rnd_id.parse::<ApplicationId>() {
-                        Ok(app_id) => {
-                            let typed_app_id: ApplicationId<rounds::RoundsAbi> = app_id.with_abi();
-                            self.state.rounds_app_id.set(Some(typed_app_id));
-                        }
-                        Err(e) => eprintln!("Failed to parse Rounds ApplicationId: {:?}", e),
-                    }
-                }
-                
-                let native_app_id = self.state.native_app_id.get()
-                    .expect("Native app ID not configured");
-                let rounds_app_id = self.state.rounds_app_id.get()
-                    .expect("Rounds app ID not configured");
+                let params = self.runtime.application_parameters();
+                let native_app_id = params.native_app_id.with_abi::<native::NativeAbi>();
+                let rounds_app_id = params.rounds_app_id.with_abi::<rounds::RoundsAbi>();
 
                 // Step 1: Call Native app to transfer tokens
                 let _native_response: native::NativeResponse = self.runtime.call_application(
@@ -158,8 +121,8 @@ impl Contract for MicrobetContract {
 
             ExtendedOperation::SendReward { recipient, amount, source_chain_id } => {
                 // Called by Rounds to distribute rewards
-                let native_app_id = self.state.native_app_id.get()
-                    .expect("Native app ID not configured");
+                let params = self.runtime.application_parameters();
+                let native_app_id = params.native_app_id.with_abi::<native::NativeAbi>();
 
                 let target_chain = if let Some(source_chain_id_str) = &source_chain_id {
                     source_chain_id_str.parse::<ChainId>().unwrap_or_else(|_| self.runtime.chain_id())
@@ -189,10 +152,10 @@ impl Contract for MicrobetContract {
             }
 
             // Pass-through operations to Native app
-            ExtendedOperation::Transfer { owner, amount, target_account, prediction: None, native_app_id: None, rounds_app_id: None } => {
+            ExtendedOperation::Transfer { owner, amount, target_account, prediction: None } => {
                 // Regular transfer without prediction - pass to Native
-                let native_app_id = self.state.native_app_id.get()
-                    .expect("Native app ID not configured");
+                let params = self.runtime.application_parameters();
+                let native_app_id = params.native_app_id.with_abi::<native::NativeAbi>();
 
                 let _response: native::NativeResponse = self.runtime.call_application(
                     true,
@@ -204,8 +167,8 @@ impl Contract for MicrobetContract {
 
             ExtendedOperation::Claim { source_account, amount, target_account, prediction: None } => {
                 // Regular claim without prediction - pass to Native
-                let native_app_id = self.state.native_app_id.get()
-                    .expect("Native app ID not configured");
+                let params = self.runtime.application_parameters();
+                let native_app_id = params.native_app_id.with_abi::<native::NativeAbi>();
 
                 let _response: native::NativeResponse = self.runtime.call_application(
                     true,
@@ -227,18 +190,19 @@ impl Contract for MicrobetContract {
             Message::TransferWithPrediction { owner: _, amount, prediction, source_chain_id, source_owner } => {
                 // Handle cross-chain transfer with prediction
                 // Place bet for source owner with SENDER'S chain_id
-                if let Some(rounds_app_id) = *self.state.rounds_app_id.get() {
-                    let _response: rounds::RoundsResponse = self.runtime.call_application(
-                        true,
-                        rounds_app_id,
-                        &rounds::RoundsOperation::PlaceBet {
-                            owner: source_owner,
-                            amount,
-                            prediction: to_rounds_prediction(prediction),
-                            source_chain_id: Some(source_chain_id), // Use SENDER'S chain from message!
-                        },
-                    );
-                }
+                let params = self.runtime.application_parameters();
+                let rounds_app_id = params.rounds_app_id.with_abi::<rounds::RoundsAbi>();
+                
+                let _response: rounds::RoundsResponse = self.runtime.call_application(
+                    true,
+                    rounds_app_id,
+                    &rounds::RoundsOperation::PlaceBet {
+                        owner: source_owner,
+                        amount,
+                        prediction: to_rounds_prediction(prediction),
+                        source_chain_id: Some(source_chain_id), // Use SENDER'S chain from message!
+                    },
+                );
             }
         }
     }

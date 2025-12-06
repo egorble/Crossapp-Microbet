@@ -63,9 +63,6 @@ pub enum ExtendedOperation {
         amount: Amount,
         target_account: linera_sdk::abis::fungible::Account,
         prediction: Option<Prediction>,
-        // Optional: set app IDs on-the-fly (Microbetreal only)
-        native_app_id: Option<String>,
-        rounds_app_id: Option<String>,
     },
     /// Claim tokens from another chain
     Claim {

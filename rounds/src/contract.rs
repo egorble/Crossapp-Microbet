@@ -75,8 +75,8 @@ impl WithContractAbi for RoundsContract {
 
 impl Contract for RoundsContract {
     type Message = Message;
-    type Parameters = (); // No parameters needed
-    type InstantiationArgument = Option<ApplicationId>; // Microbetreal app ID (generic since we can't import microbetreal here)
+    type Parameters = rounds::RoundsParameters; // No parameters needed
+    type InstantiationArgument = (); // Native App ID
     type EventValue = ();
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
@@ -86,17 +86,26 @@ impl Contract for RoundsContract {
         RoundsContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, microbetreal_app_id: Self::InstantiationArgument) {
-        // Store Microbetreal app ID if provided (we store as generic and cast when using)
-        if let Some(app_id) = microbetreal_app_id {
-            // Cast to native_fungible_abi type for storage compatibility
-            let typed_app_id: ApplicationId<native_fungible_abi::ExtendedNativeFungibleTokenAbi> = app_id.with_abi();
-            self.state.native_fungible_app_id.set(Some(typed_app_id));
-        }
+    async fn instantiate(&mut self, _arg: Self::InstantiationArgument) {
+        // Validate params access
+        let _ = self.runtime.application_parameters();
+        // Initialize Microbetreal ID as None (will be set via operation)
+        self.state.microbet_app_id.set(None);
     }
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
+            RoundsOperation::SetMicrobetAppId { microbet_app_id } => {
+                match microbet_app_id.parse::<ApplicationId>() {
+                    Ok(app_id) => {
+                        let typed_app_id: ApplicationId<native_fungible_abi::ExtendedNativeFungibleTokenAbi> = app_id.with_abi();
+                        self.state.microbet_app_id.set(Some(typed_app_id));
+                    }
+                    Err(e) => panic!("Failed to parse Microbetreal ApplicationId: {:?}", e),
+                }
+                RoundsResponse::Ok
+            }
+
             RoundsOperation::CreateRound => {
                 let timestamp = self.runtime.system_time().micros();
                 match self.state.create_round(timestamp).await {
@@ -129,8 +138,8 @@ impl Contract for RoundsContract {
                                 // Resolve the round and get winners
                                 match self.state.resolve_round_and_distribute_rewards(round.id, resolution_price, timestamp).await {
                                     Ok(winners) => {
-                                        // Get Microbetreal app ID (stored as ExtendedNativeFungibleTokenAbi for compatibility)
-                                        let microbetreal_app_id = self.state.native_fungible_app_id.get()
+                                        // Get Microbetreal app ID
+                                        let microbetreal_app_id = self.state.microbet_app_id.get()
                                             .expect("Microbetreal app ID not set");
                                         
                                         // Call Microbetreal::SendReward for each winner via cross-app call

@@ -7,7 +7,7 @@ edition = "2021"
 test = []
 
 [dependencies]
-linera-sdk = "0.15.6"
+linera-sdk = "0.15.7"
 async-graphql = { version = "7.0.17", default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 native = { path = "../native" }

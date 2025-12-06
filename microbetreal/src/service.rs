@@ -24,7 +24,7 @@ impl WithServiceAbi for MicrobetService {
 }
 
 impl Service for MicrobetService {
-    type Parameters = ();
+    type Parameters = microbetreal::MicrobetParameters;
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
         MicrobetService {
@@ -42,7 +42,10 @@ impl Service for MicrobetService {
             .expect("Failed to load state");
         
         let schema = Schema::build(
-            QueryRoot { state },
+            QueryRoot { 
+                state,
+                runtime: self.runtime.clone(),
+            },
             MutationRoot {
                 runtime: self.runtime.clone(),
             },
@@ -57,23 +60,26 @@ mod state;
 
 struct QueryRoot {
     state: state::MicrobetState,
+    runtime: Arc<ServiceRuntime<MicrobetService>>,
 }
 
 #[Object]
 impl QueryRoot {
     /// Get the configured Native app ID
     async fn native_app_id(&self) -> Option<String> {
-        self.state.native_app_id.get().as_ref().map(|id| format!("{}", id.forget_abi()))
+        let params = self.runtime.application_parameters();
+        Some(format!("{}", params.native_app_id))
     }
     
     /// Get the configured Rounds app ID
     async fn rounds_app_id(&self) -> Option<String> {
-        self.state.rounds_app_id.get().as_ref().map(|id| format!("{}", id.forget_abi()))
+        let params = self.runtime.application_parameters();
+        Some(format!("{}", params.rounds_app_id))
     }
     
-    /// Check if app IDs are configured
+    /// Check if app IDs are configured (always true with parameters)
     async fn is_configured(&self) -> bool {
-        self.state.native_app_id.get().is_some() && self.state.rounds_app_id.get().is_some()
+        true
     }
     
     /// Get version
@@ -108,8 +114,6 @@ impl MutationRoot {
         amount: String,
         target_account: AccountInput,
         prediction: Prediction,
-        native_app_id: Option<String>,
-        rounds_app_id: Option<String>,
     ) -> String {
         let fungible_account = linera_sdk::abis::fungible::Account {
             chain_id: target_account.chain_id,
@@ -117,21 +121,13 @@ impl MutationRoot {
         };
         
         // Check if we're updating app IDs
-        let updating_ids = native_app_id.is_some() || rounds_app_id.is_some();
-        
         self.runtime.schedule_operation(&ExtendedOperation::Transfer {
             owner,
             amount: amount.parse::<Amount>().unwrap_or_default(),
             target_account: fungible_account,
             prediction: Some(prediction),
-            native_app_id,
-            rounds_app_id,
         });
         
-        if updating_ids {
-            "TransferWithPrediction operation scheduled - app IDs updated and bet will be placed".to_string()
-        } else {
-            "TransferWithPrediction operation scheduled - using existing app IDs".to_string()
-        }
+        "TransferWithPrediction operation scheduled - bet will be placed".to_string()
     }
 }
