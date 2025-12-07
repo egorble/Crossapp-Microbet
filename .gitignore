@@ -7,3 +7,6 @@ microbetreal/target
 lottery-rounds/target
 lottery-app/target
 native/target
+target/
+*/target/
+**/target/

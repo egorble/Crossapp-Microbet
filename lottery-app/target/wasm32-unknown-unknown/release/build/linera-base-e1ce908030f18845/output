@@ -1,8 +1,0 @@
-cargo:rustc-check-cfg=cfg(web)
-cargo:rustc-check-cfg=cfg(chain)
-cargo:rustc-cfg=chain
-cargo:rustc-check-cfg=cfg(with_metrics)
-cargo:rustc-check-cfg=cfg(with_reqwest)
-cargo:rustc-check-cfg=cfg(with_testing)
-cargo:rustc-check-cfg=cfg(with_revm)
-cargo:rustc-check-cfg=cfg(with_getrandom)

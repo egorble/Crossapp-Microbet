@@ -1,9 +1,0 @@
-cargo:rustc-check-cfg=cfg(web)
-cargo:rustc-check-cfg=cfg(with_testing)
-cargo:rustc-check-cfg=cfg(with_metrics)
-cargo:rustc-check-cfg=cfg(with_dynamodb)
-cargo:rustc-check-cfg=cfg(with_indexeddb)
-cargo:rustc-check-cfg=cfg(with_rocksdb)
-cargo:rustc-check-cfg=cfg(with_scylladb)
-cargo:rustc-check-cfg=cfg(with_graphql)
-cargo:rustc-cfg=with_graphql
