@@ -3,22 +3,22 @@ name = "lottery-rounds"
 version = "0.1.0"
 edition = "2021"
 
-[dependencies]
-async-graphql = { version = "7.0.17", default-features = false }
-futures = "0.3.30"
-linera-sdk = "0.15.7"
-num-bigint = "0.4.5"
-num-traits = "0.2.19"
-serde = { version = "1.0.203", features = ["derive"] }
-serde_json = "1.0.117"
-native = { path = "../native" }
-native-fungible-abi = { path = "../native-fungible-abi" } # We might need this for ABI references if we call it, but generally we rely on Parameters for cross-calls.
-# Wait, native-fungible is usually referenced via abi types if we use WithAbi.
-# The user's repo seems to have existing dependencies.
-# Assuming standard deps.
+[features]
+test = []
 
-[dev-dependencies]
-tokio = { version = "1.48.0", features = ["macros", "rt-multi-thread"] }
+[dependencies]
+linera-sdk = "0.15.7"
+async-graphql = { version = "7.0.17", default-features = false }
+serde = { version = "1.0", features = ["derive"] }
+num-bigint = "0.4"
+num-traits = "0.2"
+lottery-abi = { path = "../lottery-abi" }
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+tokio = { version = "1.48" }
 
 [[bin]]
 name = "lottery_rounds_contract"

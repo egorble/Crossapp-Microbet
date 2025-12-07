@@ -1,9 +1,12 @@
-use linera_sdk::views::{RootView, ViewStorageContext, RegisterView, linera_views};
+// Copyright (c) Zefchain Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 
+use linera_sdk::views::{linera_views, RegisterView, RootView, ViewStorageContext};
 
+/// The application state for Lottery App (minimal state, mostly a wrapper).
 #[derive(RootView)]
 #[view(context = ViewStorageContext)]
 pub struct LotteryAppState {
-    // Dummy field to satisfy RootView macro requirements for non-empty struct
-    pub dummy: RegisterView<u8>,
+    /// Placeholder - lottery app is mostly stateless, delegates to native and lottery-rounds
+    pub initialized: RegisterView<bool>,
 }
