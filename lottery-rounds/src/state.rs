@@ -121,14 +121,55 @@ pub struct TicketPurchase {
     pub source_chain_id: Option<String>,
 }
 
+/// Maximum number of rounds to keep in history
+const MAX_HISTORY_ROUNDS: u64 = 5;
 
 #[allow(dead_code)]
 
 impl LotteryRoundsState {
+    /// Cleanup old round data (tickets, winners, round itself)
+    async fn cleanup_old_round(&mut self, round_id: u64) -> Result<(), String> {
+        eprintln!("Cleaning up old round: {}", round_id);
+        
+        // Get the round to find all tickets
+        if let Ok(Some(round)) = self.rounds.get(&round_id).await {
+            let total_tickets = round.total_tickets_sold;
+            
+            // Remove all ticket_to_owner entries for this round
+            for ticket_num in 1..=total_tickets {
+                let _ = self.ticket_to_owner.remove(&(round_id, ticket_num));
+            }
+            
+            // Remove all winning_tickets entries for this round
+            // We need to iterate through potential winning tickets
+            for ticket_num in 1..=total_tickets {
+                let _ = self.winning_tickets.remove(&(round_id, ticket_num));
+            }
+        }
+        
+        // Remove ticket purchases for this round - we need to collect keys first
+        // Since we can't easily iterate MapView with compound keys, we'll just remove the round
+        // Note: ticket_purchases keyed by (round_id, AccountOwner) - can't easily iterate
+        
+        // Remove the round itself
+        self.rounds.remove(&round_id)
+            .map_err(|e| format!("Failed to remove round {}: {:?}", round_id, e))?;
+        
+        eprintln!("Cleaned up round: {}", round_id);
+        Ok(())
+    }
+    
     /// Creates a new lottery round with specified ticket price
     pub async fn create_lottery_round(&mut self, ticket_price: Amount, timestamp: u64) -> Result<u64, String> {
         let round_id = *self.round_counter.get() + 1;
         self.round_counter.set(round_id);
+        
+        // Cleanup oldest rounds if we exceed MAX_HISTORY_ROUNDS
+        if round_id > MAX_HISTORY_ROUNDS {
+            let oldest_round_id = round_id - MAX_HISTORY_ROUNDS;
+            eprintln!("Round {} exceeds history limit, cleaning up round {}", round_id, oldest_round_id);
+            let _ = self.cleanup_old_round(oldest_round_id).await;
+        }
         
         let round = LotteryRound {
             id: round_id,

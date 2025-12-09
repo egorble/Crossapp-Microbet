@@ -109,6 +109,9 @@ pub enum RoundsOperation {
     // Configuration operations
     /// Set the Microbetreal app ID (called after deployment)
     SetMicrobetAppId { microbet_app_id: String },
+    /// Set the chain ID where Leaderboard app is deployed (for cross-chain updates)
+    /// If None, leaderboard is on the same chain as rounds
+    SetLeaderboardChainId { chain_id: Option<String> },
 
     // Query operations for prediction game state
     /// Get the active round
@@ -136,9 +139,16 @@ pub enum RoundsResponse {
     Winners(Vec<RoundWinnerInfo>),
 }
 
-// Message for cross-application communication (currently unused)
+// Message for cross-application communication
 #[derive(Debug, Deserialize, Serialize)]
 pub enum Message {
-    // Placeholder for future cross-chain messages
+    /// Placeholder for future cross-chain messages
     Notify,
+    /// Cross-chain leaderboard update
+    LeaderboardUpdate {
+        owner: AccountOwner,
+        chain_id: String,
+        is_win: bool,
+        amount: Amount,
+    },
 }

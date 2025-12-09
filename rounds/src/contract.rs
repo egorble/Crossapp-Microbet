@@ -105,6 +105,13 @@ impl Contract for RoundsContract {
                 }
                 RoundsResponse::Ok
             }
+            
+            RoundsOperation::SetLeaderboardChainId { chain_id } => {
+                eprintln!("SetLeaderboardChainId: {:?}", chain_id);
+                self.state.leaderboard_chain_id.set(chain_id);
+                RoundsResponse::Ok
+            }
+
 
             RoundsOperation::CreateRound => {
                 let timestamp = self.runtime.system_time().micros();
@@ -160,22 +167,54 @@ impl Contract for RoundsContract {
                                             }
 
                                             // Update leaderboard stats (for everyone)
-                                            // Use source_chain_id or default to current chain (which might be wrong for local bets? 
-                                            // Local bets usually don't have source_chain_id set? 
-                                            // RoundsState::place_bet sets source_chain_id. If None, it means same chain.
-                                            // Leaderboard expects a string chain_id.
-                                            let chain_id_str = source_chain_id.unwrap_or_else(|| self.runtime.chain_id().to_string());
+                                            let player_chain_id_str = source_chain_id.clone().unwrap_or_else(|| self.runtime.chain_id().to_string());
                                             
-                                            let _response: () = self.runtime.call_application(
-                                                true,
-                                                leaderboard_app_id,
-                                                &leaderboard::Operation::UpdateScore {
-                                                    owner,
-                                                    chain_id: chain_id_str,
-                                                    is_win,
-                                                    amount: if is_win { winnings } else { bet_amount },
+                                            // Check if leaderboard is on a different chain
+                                            let leaderboard_target_chain = self.state.leaderboard_chain_id.get().clone();
+                                            
+                                            if let Some(target_chain_str) = leaderboard_target_chain {
+                                                // Cross-chain: send message to target chain
+                                                let target_chain_id = target_chain_str.parse::<linera_sdk::linera_base_types::ChainId>()
+                                                    .expect("Invalid leaderboard_chain_id format");
+                                                
+                                                if target_chain_id != self.runtime.chain_id() {
+                                                    // Send cross-chain message
+                                                    self.runtime
+                                                        .prepare_message(Message::LeaderboardUpdate {
+                                                            owner,
+                                                            chain_id: player_chain_id_str.clone(),
+                                                            is_win,
+                                                            amount: if is_win { winnings } else { bet_amount },
+                                                        })
+                                                        .with_authentication()
+                                                        .send_to(target_chain_id);
+                                                    eprintln!("Sent LeaderboardUpdate cross-chain to {:?}", target_chain_id);
+                                                } else {
+                                                    // Same chain, call directly  
+                                                    let _response: () = self.runtime.call_application(
+                                                        true,
+                                                        leaderboard_app_id,
+                                                        &leaderboard::Operation::UpdateScore {
+                                                            owner,
+                                                            chain_id: player_chain_id_str,
+                                                            is_win,
+                                                            amount: if is_win { winnings } else { bet_amount },
+                                                        }
+                                                    );
                                                 }
-                                            );
+                                            } else {
+                                                // No target chain set, call leaderboard on same chain
+                                                let _response: () = self.runtime.call_application(
+                                                    true,
+                                                    leaderboard_app_id,
+                                                    &leaderboard::Operation::UpdateScore {
+                                                        owner,
+                                                        chain_id: player_chain_id_str,
+                                                        is_win,
+                                                        amount: if is_win { winnings } else { bet_amount },
+                                                    }
+                                                );
+                                            }
                                         }
                                         
                                         RoundsResponse::Ok
@@ -281,9 +320,35 @@ source_chain_id,
         }
     }
 
-    async fn execute_message(&mut self, _message: Self::Message) {
-        // No messages expected for Rounds app currently
-        // All communication happens via cross-app calls (operations)
+    async fn execute_message(&mut self, message: Self::Message) {
+        match message {
+            Message::Notify => {
+                // Auto-deploy notification
+                eprintln!("Rounds::execute_message - Notify received");
+            }
+            Message::LeaderboardUpdate { owner, chain_id, is_win, amount } => {
+                // Cross-chain leaderboard update received
+                eprintln!("Rounds::execute_message - LeaderboardUpdate: owner={:?}, chain={}, is_win={}, amount={:?}", 
+                    owner, chain_id, is_win, amount);
+                
+                // Call leaderboard on this chain
+                let params = self.runtime.application_parameters();
+                let leaderboard_app_id = params.leaderboard_app_id.with_abi::<leaderboard::LeaderboardAbi>();
+                
+                let _response: () = self.runtime.call_application(
+                    true,
+                    leaderboard_app_id,
+                    &leaderboard::Operation::UpdateScore {
+                        owner,
+                        chain_id,
+                        is_win,
+                        amount,
+                    }
+                );
+                
+                eprintln!("Rounds::execute_message - LeaderboardUpdate completed");
+            }
+        }
     }
 
     async fn store(mut self) {

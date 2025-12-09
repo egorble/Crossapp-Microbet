@@ -48,6 +48,11 @@ pub struct RoundsState {
     /// ApplicationId of the Native Fungible Token app (for reference)
     pub native_app_id: RegisterView<Option<ApplicationId>>,
     
+    
+    /// Chain ID where Leaderboard app is deployed (for cross-chain updates)
+    /// If None, leaderboard is on the same chain
+    pub leaderboard_chain_id: RegisterView<Option<String>>,
+    
     /// Counter for generating unique round IDs
     pub round_counter: RegisterView<u64>,
     /// All prediction rounds

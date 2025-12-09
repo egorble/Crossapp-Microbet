@@ -267,6 +267,16 @@ impl MutationRoot {
         self.runtime.schedule_operation(&RoundsOperation::SetMicrobetAppId { microbet_app_id });
         "SetMicrobetAppId operation scheduled".to_string()
     }
+    
+    /// Set the chain ID where Leaderboard app is deployed
+    /// Pass null/None to use same chain, or a chain ID string for cross-chain updates
+    async fn set_leaderboard_chain_id(&self, chain_id: Option<String>) -> String {
+        self.runtime.schedule_operation(&RoundsOperation::SetLeaderboardChainId { chain_id: chain_id.clone() });
+        match chain_id {
+            Some(id) => format!("SetLeaderboardChainId operation scheduled: {}", id),
+            None => "SetLeaderboardChainId operation scheduled: same chain".to_string(),
+        }
+    }
 
     /// Create a new prediction round
     async fn create_round(&self) -> String {
