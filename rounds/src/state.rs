@@ -335,76 +335,53 @@ impl RoundsState {
 
         // Reuse bets_to_move (which contains all bets for this round) to generate results
         for (_, bet) in &bets_to_move {
-             let mut winnings = Amount::ZERO;
-             let mut total_wagered = bet.amount_up.saturating_add(bet.amount_down); 
-             // Note: total_wagered is used for "amount" in simple reporting, but for split results we might need logic.
-             // The requirements say for leaderboard: UpdateScore { won/loss, amount }.
-             // If user bet both:
-             // 1. UP wins: amount_up wins. amount_down loses.
-             // 2. DOWN wins: amount_down wins. amount_up loses.
-             // 3. Draw: both lose (or refunded? Currently logic says "no one wins" if Draw).
-             
-             let is_win = match result {
-                Some(Prediction::Up) => !bet.amount_up.is_zero(),
-                Some(Prediction::Down) => !bet.amount_down.is_zero(),
-                None => false, 
-             };
+             // Calculate winnings for UP and DOWN
+             let mut winnings_up = Amount::ZERO;
+             let mut winnings_down = Amount::ZERO;
 
              if !winner_pool.is_zero() {
                  match result {
                     Some(Prediction::Up) => {
                          if !bet.amount_up.is_zero() {
-                             winnings = calculate_winnings_proportional(bet.amount_up, winner_pool, total_prize_pool);
+                             winnings_up = calculate_winnings_proportional(bet.amount_up, winner_pool, total_prize_pool);
                          }
                     },
                     Some(Prediction::Down) => {
                          if !bet.amount_down.is_zero() {
-                             winnings = calculate_winnings_proportional(bet.amount_down, winner_pool, total_prize_pool);
+                             winnings_down = calculate_winnings_proportional(bet.amount_down, winner_pool, total_prize_pool);
                          }
                     },
                     None => {},
                  }
              }
+
+             let total_wagered = bet.amount_up.saturating_add(bet.amount_down);
+             let total_winnings = winnings_up.saturating_add(winnings_down);
              
-             // For the simplified return type (AccountOwner, Amount, Amount, bool, Option<String>), 
-             // we need to return the RELEVANT bet amount.
-             // If Up won, relevant bet amount is amount_up.
-             // If Down won, relevant bet amount is amount_down.
-             // But we also need to report LOSSES for the other side.
-             // The current signature allows only one entry per user.
-             // Refactoring signature to return BOTH results if needed? or simply sending the NET outcome?
-             // Leaderboard expects specific stats.
-             // Let's modify the signature or return logic to handle this.
-             // Actually, `contract.rs` iterates this. We can return multiple entries per user? No, map key is unique.
-             // But `results` is a Vec. We can push multiple entries! 
-             // Ah, but `results` in this function signature is `Vec<(AccountOwner, Amount, Amount, bool, Option<String>)>`.
-             // We can push two entries if needed: one for win, one for loss.
+             // Logic for leaderboard:
+             // 1. Calculate Net Profit = Total Winnings - Total Wagered
+             // 2. If Net Profit > 0: Player WON. Amount = Net Profit.
+             // 3. If Net Profit <= 0: Player LOST (or broke even). Amount = Total Wagered - Total Winnings (Net Loss).
              
-             let mut pushed = false;
+             let is_win = total_winnings > total_wagered;
+             let amount_for_leaderboard = if is_win {
+                 total_winnings.saturating_sub(total_wagered)
+             } else {
+                 total_wagered.saturating_sub(total_winnings)
+             };
+
+             // We return a SINGLE entry per user for this round.
+             // The `amount` field in the result tuple will now represent the Clean Profit (if win) or Net Loss (if loss).
+             // The `bet_amount` field usually isn't used for logic downstream other than display, so we put total_wagered there.
+             // The `winnings` field usually represents generic winnings, we put total_winnings there.
              
-             // Handle UP bet
-             if !bet.amount_up.is_zero() {
-                 let up_won = result == Some(Prediction::Up);
-                 let up_winnings = if up_won { winnings } else { Amount::ZERO }; // If Up won, winnings is calculated above. If Down won/draw, 0.
-                 // Wait, `winnings` above logic was: if UP wins, calc based on amount_up.
-                 
-                 results.push((bet.owner, bet.amount_up, up_winnings, up_won, bet.source_chain_id.clone()));
-                 pushed = true;
-             }
-             
-             // Handle DOWN bet
-             if !bet.amount_down.is_zero() {
-                 let down_won = result == Some(Prediction::Down);
-                 let down_winnings = if down_won { winnings } else { Amount::ZERO }; // If Down won...
-                 
-                 results.push((bet.owner, bet.amount_down, down_winnings, down_won, bet.source_chain_id.clone()));
-                 pushed = true;
-             }
-             
-             if !pushed {
-                 // Should not happen for active bets, but safe guard
-                 results.push((bet.owner, Amount::ZERO, Amount::ZERO, false, bet.source_chain_id.clone()));
-             }
+             results.push((
+                 bet.owner, 
+                 total_wagered, 
+                 total_winnings, // This is the amount sent to user wallet
+                 is_win, 
+                 bet.source_chain_id.clone()
+             ));
         }
         
         Ok(results)

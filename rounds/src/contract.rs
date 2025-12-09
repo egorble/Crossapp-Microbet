@@ -172,6 +172,13 @@ impl Contract for RoundsContract {
                                             // Check if leaderboard is on a different chain
                                             let leaderboard_target_chain = self.state.leaderboard_chain_id.get().clone();
                                             
+                                            // Calculate clean amount (Net Profit or Net Loss)
+                                            let clean_amount = if is_win {
+                                                winnings.saturating_sub(bet_amount)
+                                            } else {
+                                                bet_amount.saturating_sub(winnings)
+                                            };
+
                                             if let Some(target_chain_str) = leaderboard_target_chain {
                                                 // Cross-chain: send message to target chain
                                                 let target_chain_id = target_chain_str.parse::<linera_sdk::linera_base_types::ChainId>()
@@ -184,7 +191,7 @@ impl Contract for RoundsContract {
                                                             owner,
                                                             chain_id: player_chain_id_str.clone(),
                                                             is_win,
-                                                            amount: if is_win { winnings } else { bet_amount },
+                                                            amount: clean_amount,
                                                         })
                                                         .with_authentication()
                                                         .send_to(target_chain_id);
@@ -198,7 +205,7 @@ impl Contract for RoundsContract {
                                                             owner,
                                                             chain_id: player_chain_id_str,
                                                             is_win,
-                                                            amount: if is_win { winnings } else { bet_amount },
+                                                            amount: clean_amount,
                                                         }
                                                     );
                                                 }
@@ -211,7 +218,7 @@ impl Contract for RoundsContract {
                                                         owner,
                                                         chain_id: player_chain_id_str,
                                                         is_win,
-                                                        amount: if is_win { winnings } else { bet_amount },
+                                                        amount: clean_amount,
                                                     }
                                                 );
                                             }
